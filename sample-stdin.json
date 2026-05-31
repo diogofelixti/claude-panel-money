@@ -1,0 +1,17 @@
+{
+  "model": { "display_name": "Sonnet 4.6" },
+  "cwd": "/home/user/claude-panel",
+  "effort": { "level": "high" },
+  "context_window": {
+    "context_window_size": 200000,
+    "current_usage": {
+      "input_tokens": 18000,
+      "cache_creation_input_tokens": 12000,
+      "cache_read_input_tokens": 104000
+    }
+  },
+  "rate_limits": {
+    "five_hour":  { "used_percentage": 42, "resets_at": 1780256682 },
+    "seven_day":  { "used_percentage": 88, "resets_at": 1780507902 }
+  }
+}
