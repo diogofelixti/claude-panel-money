@@ -52,8 +52,34 @@ usage_color() {
     fi
 }
 
+# Return color escape based on a BRL cost amount (same green→red intensity ladder
+# as usage_color). Thresholds in R$: <20 green, <50 yellow, <100 orange, else red.
+# Usage: cost_color <brl_amount>
+cost_color() {
+    local lvl
+    lvl=$(LC_NUMERIC=C awk -v v="$1" 'BEGIN{v=v+0; if(v>=100)print 3; else if(v>=50)print 2; else if(v>=20)print 1; else print 0}')
+    case "$lvl" in
+        3) echo "$red" ;;
+        2) echo "$orange" ;;
+        1) echo "$yellow" ;;
+        *) echo "$green" ;;
+    esac
+}
+
+# Format a numeric amount as BRL with comma decimal (406.9143 -> "406,91").
+# LC_NUMERIC=C keeps awk emitting a dot, then we swap it for the Brazilian comma.
+fmt_brl() {
+    LC_NUMERIC=C awk -v v="$1" 'BEGIN{printf "%.2f", v+0}' | tr '.' ','
+}
+
 # Resolve config directory: CLAUDE_CONFIG_DIR (set by alias) or default ~/.claude
 claude_config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
+# ===== Cost libs (LiteLLM prices + USD->BRL + cost calc) — optional, never fatal =====
+# Sourced from the same directory as this script. lib_cost.sh pulls in lib_prices.sh
+# and lib_fx.sh itself. If any are missing, the cost segment is simply skipped.
+statusline_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+[ -n "$statusline_dir" ] && [ -f "$statusline_dir/lib_cost.sh" ] && source "$statusline_dir/lib_cost.sh" 2>/dev/null
 
 # Return 0 (true) if $1 > $2 using semantic versioning
 version_gt() {
@@ -510,6 +536,21 @@ else
     # No valid usage data — show placeholders
     out+="${sep}${white}5h${reset} ${dim}-${reset}"
     out+="${sep}${white}7d${reset} ${dim}-${reset}"
+fi
+
+# ===== Estimated cost in BRL (sessão / hoje) — segment placed right after extra =====
+# Format: custo R$1,23 (sess) / R$4,56 (hoje). Each amount colored by its own
+# intensity via cost_color. Gated by compute_costs' own 60s result cache, so this
+# does not rescan the JSONL files on every render. Skipped silently if libs absent.
+if command -v compute_costs >/dev/null 2>&1; then
+    cost_json=$(compute_costs "${cwd:-$PWD}" 2>/dev/null)
+    if [ -n "$cost_json" ] && echo "$cost_json" | jq -e '.session_brl' >/dev/null 2>&1; then
+        sess_brl=$(echo "$cost_json" | jq -r '.session_brl // 0')
+        today_brl=$(echo "$cost_json" | jq -r '.today_brl // 0')
+        sess_col=$(cost_color "$sess_brl")
+        today_col=$(cost_color "$today_brl")
+        out+="${sep}${white}custo${reset} ${sess_col}R\$$(fmt_brl "$sess_brl")${reset} ${dim}(sess)${reset} ${dim}/${reset} ${today_col}R\$$(fmt_brl "$today_brl")${reset} ${dim}(hoje)${reset}"
+    fi
 fi
 
 # ===== Update check (cached, 24h TTL) =====
